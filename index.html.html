@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvoicePajak — Generator Invoice & Kwitansi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --accent:#1565C0;
+    --accent-ink:#FFFFFF;
+    --bg:#F6F5F1;
+    --card:#FFFFFF;
+    --border:#111111;
+    --text:#1C1D21;
+    --text-soft:#6E7077;
+    --danger:#C84B3E;
+    --success:#1E8E5A;
+    --info:#1565C0;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(20,20,15,.05), 0 10px 28px rgba(20,20,15,.05);
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  body.dark{
+    --bg:#121317;--card:#1B1C21;--border:#2C2E35;--text:#ECECEE;--text-soft:#9A9DA6;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;transition:background .2s,color .2s;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{
+    font-family:inherit;width:100%;padding:10px 12px;
+    border:1px solid var(--border);border-radius:10px;
+    background:var(--card);color:var(--text);font-size:14px;outline:none;
+    transition:border-color .15s,box-shadow .15s;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(21,101,192,.25);}
+  textarea{resize:vertical;min-height:64px;}
+  label{display:block;font-size:12.5px;font-weight:600;color:var(--text-soft);margin-bottom:6px;letter-spacing:.01em;}
+  .field{margin-bottom:14px;}
+  .field-help{font-size:12px;color:var(--text-soft);margin-top:6px;line-height:1.4;}
+
+  /* topbar */
+  .topbar{
+    position:sticky;top:0;z-index:50;
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+    gap:12px;padding:14px 24px;background:var(--bg);border-bottom:1px solid var(--border);
+  }
+  .brand-mark{display:flex;align-items:center;gap:10px;}
+  .brand-icon{width:34px;height:34px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;}
+  .brand-title{font-weight:800;font-size:16px;line-height:1.2;}
+  .brand-sub{font-size:12px;color:var(--text-soft);}
+  .topbar-actions{display:flex;align-items:center;gap:8px;}
+  .icon-btn{width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--text);}
+  .icon-btn:hover{border-color:var(--accent);}
+  .btn-primary{background:var(--accent);color:var(--accent-ink);border:1px solid var(--accent);border-radius:10px;font-weight:700;font-size:14px;padding:0 16px;height:38px;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  .btn-primary:disabled{background:var(--border);border-color:var(--border);color:var(--text-soft);cursor:not-allowed;}
+  .btn-primary:not(:disabled):hover{filter:brightness(0.96);}
+
+  /* mode toggle */
+  .mode-toggle{display:flex;border:1px solid #111;border-radius:10px;overflow:hidden;background:var(--card);flex-shrink:0;}
+  .mode-toggle button{border:none;background:transparent;color:var(--text);font-size:13.5px;font-weight:700;padding:8px 18px;}
+  .mode-toggle button:not(:last-child){border-right:1px solid #111;}
+  .mode-toggle button.active{background:var(--accent);color:var(--accent-ink);}
+
+  /* layout */
+  .layout{max-width:1280px;margin:0 auto;padding:24px;display:flex;flex-direction:column;gap:20px;}
+  @media(min-width:1020px){
+    .layout{flex-direction:row;align-items:flex-start;}
+    .form-col{flex:1.05;min-width:0;}
+    .preview-col{flex:0.95;min-width:0;}
+    .preview-sticky{position:sticky;top:88px;}
+  }
+  .form-col{display:flex;flex-direction:column;gap:16px;}
+
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;}
+  .card-title{font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:2px;}
+  .card-desc{font-size:12.5px;color:var(--text-soft);margin-bottom:14px;line-height:1.5;}
+  .row{display:grid;gap:12px;}
+  .row-2{grid-template-columns:repeat(2,1fr);}
+  .row-3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:560px){.row-2,.row-3{grid-template-columns:1fr;}}
+  .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .btn-soft{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:9px;font-size:12.5px;font-weight:600;padding:7px 12px;display:flex;align-items:center;gap:6px;}
+  .btn-soft:hover{border-color:var(--accent);}
+
+  /* sign upload */
+  .logo-upload{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
+  .logo-preview{width:56px;height:56px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;overflow:hidden;border:1px solid var(--border);}
+  .logo-preview img{width:100%;height:100%;object-fit:contain;}
+  .logo-upload-controls{flex:1;}
+  .file-btn{display:inline-flex;align-items:center;gap:6px;border:1px dashed var(--border);border-radius:9px;padding:8px 12px;font-size:12.5px;font-weight:600;color:var(--text-soft);cursor:pointer;}
+  .file-btn:hover{border-color:var(--accent);color:var(--text);}
+
+  /* item rows */
+  .item-row{border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;}
+  .item-row-top{display:grid;grid-template-columns:1fr 110px;gap:10px;margin-bottom:10px;}
+  .item-row-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;}
+  @media(max-width:760px){.item-row-grid{grid-template-columns:1fr 1fr;}}
+  .item-total{font-size:13px;font-weight:700;font-family:var(--mono);}
+  .item-remove{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--danger);display:flex;align-items:center;justify-content:center;}
+  .item-remove:hover{border-color:var(--danger);background:rgba(200,75,62,.08);}
+  .item-hint{font-size:12px;color:var(--text-soft);margin-top:8px;font-style:italic;}
+  .empty-state{text-align:center;color:var(--text-soft);font-size:13px;padding:18px;border:1px dashed var(--border);border-radius:12px;}
+
+  /* tax config */
+  .check-row{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:11px;margin-bottom:10px;cursor:pointer;}
+  .check-row:hover{border-color:var(--accent);}
+  .check-row input[type=checkbox]{width:18px;height:18px;flex-shrink:0;margin-top:1px;accent-color:var(--accent);}
+  .check-row-text strong{font-size:13.5px;display:block;margin-bottom:2px;}
+  .check-row-text span{font-size:12px;color:var(--text-soft);line-height:1.4;}
+  .custom-pph-row{display:grid;grid-template-columns:1fr 110px auto;gap:8px;margin-bottom:8px;}
+
+  /* ringkasan */
+  .summary-line{display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px;padding:7px 0;font-family:var(--mono);}
+  .summary-line span:first-child{font-family:var(--sans);color:var(--text-soft);font-size:13px;}
+  .summary-line.bold{font-weight:800;font-family:var(--sans);}
+  .summary-line.bold span:first-child{color:var(--text);font-weight:800;}
+  .summary-line.deduct span:last-child{color:var(--danger);}
+  .summary-divider{height:1px;background:var(--border);margin:6px 0;}
+  .summary-net span:last-child{color:var(--info);font-size:15px;font-weight:800;}
+  .summary-net span:first-child{font-weight:800;color:var(--text);font-family:var(--sans);}
+  .info-box{margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(21,101,192,.08);color:var(--info);font-size:12.5px;line-height:1.5;}
+
+  /* ========= DOCUMENT PREVIEW ========= */
+  .preview-label{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+
+  /* outer card border — the main document border */
+  .invoice-card{
+    background:#FFFFFF;color:#1C1D21;
+    border:2px solid #111111;border-radius:10px;
+    padding:28px;
+    box-shadow:0 1px 2px rgba(20,20,15,.05),0 10px 28px rgba(20,20,15,.05);
+    overflow:hidden;
+  }
+
+  /* INVOICE header: big bold title left, meta right */
+  .inv-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:20px;}
+  .inv-plain-title{font-size:26px;font-weight:900;letter-spacing:.01em;color:#111111;line-height:1;}
+  .inv-meta{text-align:right;font-size:12.5px;color:#6E7077;line-height:1.6;}
+  .inv-meta b{font-family:var(--mono);font-size:13px;color:#1C1D21;display:block;}
+
+  /* parties */
+  .inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:18px;border:1px solid #111111;border-radius:8px;overflow:hidden;}
+  .inv-parties>div{padding:12px 14px;}
+  .inv-parties>div:first-child{border-right:1px solid #111111;}
+  @media(max-width:480px){.inv-parties{grid-template-columns:1fr;}.inv-parties>div:first-child{border-right:none;border-bottom:1px solid #111111;}}
+  .inv-party-label{font-size:11px;font-weight:800;letter-spacing:.05em;color:#6E7077;margin-bottom:6px;}
+  .inv-party-name{font-weight:700;font-size:14px;margin-bottom:2px;}
+  .inv-party-line{font-size:12.5px;color:#42454C;line-height:1.5;}
+  .pkp-badge{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:6px;background:rgba(30,142,90,.12);color:#1E8E5A;font-size:11px;font-weight:800;letter-spacing:.04em;}
+
+  /* invoice table */
+  table.inv-table{width:100%;border-collapse:collapse;margin-bottom:14px;border:1px solid #111111;table-layout:fixed;}
+  table.inv-table th{text-align:left;font-size:11px;letter-spacing:.04em;color:#42454C;border:1px solid #111111;padding:6px 8px;font-weight:800;background:#F6F5F1;}
+  table.inv-table th:not(:first-child),table.inv-table td:not(:first-child){text-align:right;}
+  table.inv-table td{font-size:13px;padding:8px 8px;border:1px solid #111111;word-break:break-word;overflow-wrap:break-word;}
+
+  /* summary */
+  .inv-summary{display:flex;justify-content:flex-end;margin-bottom:12px;}
+  .inv-summary-box{width:100%;max-width:300px;}
+  .inv-summary-line{display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;font-family:var(--mono);color:#42454C;}
+  .inv-summary-line span:first-child{font-family:var(--sans);}
+  .inv-summary-line.bold{font-weight:800;color:#1C1D21;font-family:var(--sans);border-top:1px solid #111111;margin-top:4px;padding-top:8px;}
+  .inv-summary-line.bold span:last-child{font-family:var(--mono);}
+  .inv-summary-line.deduct span:last-child{color:#C84B3E;}
+  .inv-summary-line.net{font-weight:800;font-size:14.5px;border-top:1px solid #111111;margin-top:4px;padding-top:8px;}
+  .inv-summary-line.net span:first-child{font-family:var(--sans);color:#1C1D21;}
+  .inv-summary-line.net span:last-child{color:#1565C0;font-family:var(--mono);}
+
+  .inv-terbilang{font-size:12px;font-style:italic;color:#42454C;margin-bottom:12px;}
+  .inv-note{font-size:12px;color:#42454C;border-top:1px solid #111111;padding-top:10px;margin-bottom:12px;}
+
+  /* bottom row: bank left, sign right — NO border on this row */
+  .doc-bottom{display:flex;gap:20px;align-items:flex-end;margin-top:16px;}
+  .bank-block{flex:1;min-width:160px;font-size:12.5px;line-height:1.7;white-space:pre-line;color:#1C1D21;}
+  .bank-block .ttl{font-weight:800;margin-bottom:3px;}
+
+  /* signature: no outer border */
+  .sign-wrap{display:flex;justify-content:flex-end;}
+  .sign-box{width:200px;text-align:center;}
+  .sign-place{font-size:12px;color:#42454C;margin-bottom:4px;}
+  .sign-img-wrap{height:60px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:0;}
+  .sign-img-wrap img{max-height:60px;max-width:160px;object-fit:contain;}
+  .sign-name{font-weight:800;font-size:13px;border-top:1px solid #111111;padding-top:6px;margin-top:2px;}
+
+  /* ========= KWITANSI PREVIEW ========= */
+  /* kwitansi title: big bold left, same style as invoice */
+  .k-title{font-size:28px;font-weight:900;color:#111111;margin:0 0 18px 0;letter-spacing:.01em;}
+  .k-no-row{display:flex;font-size:13.5px;margin-bottom:16px;}
+  .k-no-label{font-weight:700;width:170px;flex-shrink:0;}
+  .k-no-colon{width:14px;flex-shrink:0;}
+
+  /* kwitansi detail rows — no border box */
+  .k-row{display:flex;font-size:13.5px;line-height:1.7;margin-bottom:8px;}
+  .k-row:last-child{margin-bottom:0;}
+  .k-label{font-weight:700;width:170px;flex-shrink:0;}
+  .k-colon{width:14px;flex-shrink:0;}
+  .k-value{flex:1;word-break:break-word;}
+  .k-value.bold{font-weight:700;}
+
+  /* highlighted value (grey bg like reference) */
+  .k-value.hi{background:#EFEFEF;border-radius:4px;padding:3px 8px;}
+
+  /* terbilang row spans wider */
+  .k-terbilang-val{background:#EFEFEF;border-radius:4px;padding:3px 8px;display:inline-block;text-align:center;min-width:60%;}
+
+  /* overflow safety */
+  .form-col,.preview-col{min-width:0;}
+  .invoice-card{overflow:hidden;}
+  .inv-party-line,.inv-party-name,.inv-summary-line span,.bank-block{word-break:break-word;overflow-wrap:break-word;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand-mark">
+    <div class="brand-icon">%</div>
+    <div>
+      <div class="brand-title">InvoicePajak</div>
+      <div class="brand-sub">Generator Invoice &amp; Kwitansi</div>
+    </div>
+  </div>
+  <div class="mode-toggle" id="modeToggle">
+    <button type="button" id="modeBtnInvoice" class="active" data-set-mode="invoice">Invoice</button>
+    <button type="button" id="modeBtnKwitansi" data-set-mode="kwitansi">Kwitansi</button>
+  </div>
+  <div class="topbar-actions">
+    <button class="icon-btn" id="btnTheme" title="Mode gelap/terang">
+      <svg id="iconMoon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+    </button>
+    <button class="icon-btn" id="btnReset" title="Reset semua data">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
+    </button>
+    <button class="btn-primary" id="btnDownload" disabled>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"/></svg>
+      Download PDF
+    </button>
+  </div>
+</header>
+
+<div class="layout" id="appRoot">
+  <section class="form-col">
+
+    <!-- Detail Invoice -->
+    <div class="card" data-mode="invoice">
+      <div class="card-title">📄 Detail Invoice</div>
+      <div class="row row-3">
+        <div class="field" style="margin-bottom:0;"><label for="invoiceNo">No. Invoice</label><input type="text" id="invoiceNo"></div>
+        <div class="field" style="margin-bottom:0;"><label for="tanggal">Tanggal</label><input type="date" id="tanggal"></div>
+        <div class="field" style="margin-bottom:0;"><label for="jatuhTempo">Jatuh Tempo</label><input type="date" id="jatuhTempo"></div>
+      </div>
+    </div>
+
+    <!-- Penjual -->
+    <div class="card">
+      <div class="card-title">🏢 Penjual (Anda)</div>
+      <div class="field"><label for="sNama">Nama</label><input type="text" id="sNama" placeholder="Nama / nama usaha"></div>
+      <div class="row row-2">
+        <div class="field"><label for="sNpwp">NPWP</label><input type="text" id="sNpwp" placeholder="NPWP/NIK"></div>
+        <div class="field"><label for="sKota">Kota</label><input type="text" id="sKota" placeholder="Cth: Surabaya"></div>
+      </div>
+      <div class="field" style="margin-bottom:0;"><label for="sAlamat">Alamat</label><input type="text" id="sAlamat"></div>
+    </div>
+
+    <!-- Pembeli -->
+    <div class="card" data-mode="invoice">
+      <div class="card-title">👤 Pembeli</div>
+      <div class="field"><label for="bNama">Nama</label><input type="text" id="bNama" placeholder="Nama pembeli / klien"></div>
+      <div class="row row-2">
+        <div class="field"><label for="bNpwp">NPWP</label><input type="text" id="bNpwp" placeholder="NPWP/NIK (opsional)"></div>
+        <div class="field"><label for="bKota">Kota</label><input type="text" id="bKota"></div>
+      </div>
+      <div class="field" style="margin-bottom:0;"><label for="bAlamat">Alamat</label><input type="text" id="bAlamat"></div>
+    </div>
+
+    <!-- Item Invoice -->
+    <div class="card" data-mode="invoice">
+      <div class="section-head">
+        <div class="card-title" style="margin-bottom:0;">🧾 Item Invoice</div>
+        <button class="btn-soft" id="btnAddItem">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Tambah baris
+        </button>
+      </div>
+      <div id="itemsContainer"></div>
+      <div class="item-hint">💡 Harga diisi sudah termasuk PPN (inclusive). Sistem hitung DPP &amp; PPN otomatis.</div>
+    </div>
+
+    <!-- Konfigurasi Pajak (hanya PKP + PPh 23 + Custom) -->
+    <div class="card" data-mode="invoice">
+      <div class="card-title">⚙️ Konfigurasi Pajak</div>
+      <label class="check-row" for="chkPkp">
+        <input type="checkbox" id="chkPkp">
+        <div class="check-row-text">
+          <strong>PKP — Pengusaha Kena Pajak</strong>
+          <span>Centang kalau penjual PKP. PPN 12% dihitung dari DPP (harga ÷ 1,12).</span>
+        </div>
+      </label>
+      <label class="check-row" for="chkPph23">
+        <input type="checkbox" id="chkPph23">
+        <div class="check-row-text">
+          <strong>PPh 23 — Jasa (2%)</strong>
+          <span>Dipotong buyer. Berlaku buat jasa konsultan, manajemen, teknik, dll.</span>
+        </div>
+      </label>
+      <div class="section-head" style="margin-top:8px;">
+        <label style="margin-bottom:0;">PPh Custom (opsional)</label>
+        <button class="btn-soft" id="btnAddCustomPph">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Tambah PPh
+        </button>
+      </div>
+      <div class="field-help" style="margin-top:-6px;margin-bottom:10px;">Tambah PPh lain dengan nama &amp; tarif bebas. Isi tarif dalam persen (cth: 2 = 2%).</div>
+      <div id="customPphContainer"></div>
+      <div class="empty-state" id="customPphEmpty">Belum ada PPh custom.</div>
+    </div>
+
+    <!-- Ringkasan Pajak -->
+    <div class="card" data-mode="invoice">
+      <div class="card-title">📊 Ringkasan Pajak</div>
+      <div id="summaryBody"></div>
+      <div class="info-box" id="infoBox" style="display:none;"></div>
+    </div>
+
+    <!-- Detail Kwitansi -->
+    <div class="card" data-mode="kwitansi" style="display:none;">
+      <div class="card-title">🧾 Detail Kwitansi</div>
+      <div class="row row-2">
+        <div class="field"><label for="kwNo">No. Kwitansi</label><input type="text" id="kwNo"></div>
+        <div class="field"><label for="kwTanggal">Tanggal</label><input type="date" id="kwTanggal"></div>
+      </div>
+      <div class="field"><label for="kwTerimaDari">Telah Diterima Dari</label><input type="text" id="kwTerimaDari" placeholder="Nama yang menyerahkan uang"></div>
+      <div class="field"><label for="kwJumlah">Uang Sejumlah (Rp)</label><input type="number" min="0" id="kwJumlah"></div>
+      <div class="field"><label for="kwUntuk">Untuk Pembayaran</label><textarea id="kwUntuk" rows="2"></textarea></div>
+      <div class="field" style="margin-bottom:0;"><label for="kwKeterangan">Keterangan (opsional)</label><input type="text" id="kwKeterangan"></div>
+    </div>
+
+    <!-- Tanda Tangan & Rekening (shared) -->
+    <div class="card">
+      <div class="card-title">✍️ Tanda Tangan &amp; Rekening</div>
+      <div class="card-desc">Dipakai di Invoice &amp; Kwitansi. Posisi kiri-bawah (rekening) &amp; kanan-bawah (ttd) di dalam dokumen.</div>
+
+      <!-- toggle ttd -->
+      <label class="check-row" for="chkSign" style="margin-bottom:14px;">
+        <input type="checkbox" id="chkSign" checked>
+        <div class="check-row-text">
+          <strong>Sertakan Tanda Tangan</strong>
+          <span>Matikan kalau dokumen belum perlu ditandatangani.</span>
+        </div>
+      </label>
+
+      <div id="signSection">
+        <div class="logo-upload">
+          <div class="logo-preview" id="signPreview" style="background:#fff;">
+            <img id="signPreviewImg" src="data:image/png;base64,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" style="width:100%;height:100%;object-fit:contain;" alt="ttd">
+          </div>
+          <div class="logo-upload-controls">
+            <label class="file-btn" for="signInput">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
+              Ganti gambar ttd
+            </label>
+            <input type="file" id="signInput" accept="image/png,image/jpeg" style="display:none;">
+          </div>
+        </div>
+        <div class="field">
+          <label for="signerName">Nama Penandatangan</label>
+          <input type="text" id="signerName" placeholder="Cth: Mohammad Said">
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:0;">
+        <label for="bankInfo">Info Rekening Transfer</label>
+        <textarea id="bankInfo" rows="3" placeholder="Cth: BCA 271.0877.877&#10;MANDIRI 142.00.210.58275&#10;A/N MOHAMMAD SAID"></textarea>
+        <div class="field-help">Kosongkan kalau tidak perlu ditampilkan di dokumen.</div>
+      </div>
+    </div>
+
+    <!-- Catatan -->
+    <div class="card">
+      <div class="card-title">📝 Catatan / Syarat &amp; Ketentuan</div>
+      <textarea id="catatan" placeholder="Cth: Pembayaran via QRIS dan Transfer Bank, dalam 7 hari kerja."></textarea>
+    </div>
+
+  </section>
+
+  <aside class="preview-col">
+    <div class="preview-sticky">
+      <div class="card">
+        <div class="preview-label" id="previewLabel">👁️ Preview Invoice (real-time)</div>
+
+        <!-- INVOICE PREVIEW -->
+        <div class="invoice-card" id="invoicePreview">
+          <div class="inv-head">
+            <div class="inv-plain-title">INVOICE</div>
+            <div class="inv-meta">
+              <b id="pvInvoiceNo">INV-0001</b>
+              <span id="pvTanggal">—</span><br>
+              <span id="pvJatuhTempo">—</span>
+            </div>
+          </div>
+          <div class="inv-parties">
+            <div>
+              <div class="inv-party-label">DARI</div>
+              <div class="inv-party-name" id="pvSellerNama">—</div>
+              <div class="inv-party-line" id="pvSellerNpwp"></div>
+              <div class="inv-party-line" id="pvSellerAlamat"></div>
+              <div class="inv-party-line" id="pvSellerKota"></div>
+              <div id="pvPkpBadge"></div>
+            </div>
+            <div>
+              <div class="inv-party-label">KEPADA</div>
+              <div class="inv-party-name" id="pvBuyerNama">—</div>
+              <div class="inv-party-line" id="pvBuyerNpwp"></div>
+              <div class="inv-party-line" id="pvBuyerAlamat"></div>
+              <div class="inv-party-line" id="pvBuyerKota"></div>
+            </div>
+          </div>
+          <table class="inv-table">
+            <thead><tr><th>Deskripsi</th><th>Qty</th><th>Harga</th><th>Total</th></tr></thead>
+            <tbody id="pvItemsBody"></tbody>
+          </table>
+          <div class="inv-summary">
+            <div class="inv-summary-box" id="pvSummaryBox"></div>
+          </div>
+          <div class="inv-terbilang" id="pvTerbilang"></div>
+          <div class="inv-note" id="pvNote" style="display:none;"></div>
+          <div class="doc-bottom">
+            <div class="bank-block" id="pvBankBlock" style="display:none;"></div>
+            <div id="pvSignBlock"></div>
+          </div>
+        </div>
+
+        <!-- KWITANSI PREVIEW -->
+        <div class="invoice-card" id="kwitansiPreview" style="display:none;">
+          <div class="k-title">KWITANSI</div>
+          <div class="k-no-row">
+            <div class="k-no-label">No.</div>
+            <div class="k-no-colon">:</div>
+            <div class="k-value" id="kvNo">—</div>
+          </div>
+          <div class="k-row"><div class="k-label">Telah diterima dari</div><div class="k-colon">:</div><div class="k-value bold" id="kvTerimaDari">—</div></div>
+          <div class="k-row"><div class="k-label">Uang Sejumlah</div><div class="k-colon">:</div><div class="k-value"><span class="k-value hi" id="kvJumlah">—</span></div></div>
+          <div class="k-row"><div class="k-label">Terbilang</div><div class="k-colon">:</div><div class="k-value"><span class="k-terbilang-val" id="kvTerbilang">—</span></div></div>
+          <div class="k-row"><div class="k-label">Untuk Pembayaran</div><div class="k-colon">:</div><div class="k-value hi" id="kvUntuk">—</div></div>
+          <div class="k-row"><div class="k-label">Keterangan</div><div class="k-colon">:</div><div class="k-value hi" id="kvKeterangan">-</div></div>
+          <div class="doc-bottom" style="margin-top:20px;">
+            <div class="bank-block" id="kvBankBlock" style="display:none;"></div>
+            <div id="kvSignBlock"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BUILTIN_SIGN = "data:image/png;base64,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";
+
+  let items = [newItem()];
+  let customPph = [];
+  let signatureDataUrl = BUILTIN_SIGN;
+  let mode = "invoice";
+
+  function newItem(){ return {id:cryptoId(),deskripsi:"",tipe:"jasa",qty:1,satuan:"pcs",harga:0}; }
+  function newCustomPph(){ return {id:cryptoId(),nama:"",tarif:0}; }
+  function cryptoId(){ return Math.random().toString(36).slice(2,9); }
+
+  function fmtRupiah(n){ n=Math.round(n||0); return "Rp "+n.toLocaleString("id-ID"); }
+  function fmtSignedRupiah(n){ n=Math.round(n||0); return (n<0?"-":"")+fmtRupiah(Math.abs(n)); }
+
+  const MONTHS_ID=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  function fmtTanggalID(s){
+    if(!s) return "—";
+    const [y,m,d]=s.split("-").map(Number);
+    if(!y||!m||!d) return "—";
+    return `${d} ${MONTHS_ID[m-1]} ${y}`;
+  }
+  function todayISO(off){
+    const d=new Date(); d.setDate(d.getDate()+(off||0));
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  }
+
+  const SATUAN=["","satu","dua","tiga","empat","lima","enam","tujuh","delapan","sembilan","sepuluh","sebelas"];
+  function tCore(n){
+    n=Math.floor(n);
+    if(n<12) return SATUAN[n];
+    if(n<20) return tCore(n-10)+" belas";
+    if(n<100) return tCore(Math.floor(n/10))+" puluh"+(n%10?" "+tCore(n%10):"");
+    if(n<200) return "seratus"+(n%100?" "+tCore(n%100):"");
+    if(n<1000) return tCore(Math.floor(n/100))+" ratus"+(n%100?" "+tCore(n%100):"");
+    if(n<2000) return "seribu"+(n%1000?" "+tCore(n%1000):"");
+    if(n<1e6) return tCore(Math.floor(n/1000))+" ribu"+(n%1000?" "+tCore(n%1000):"");
+    if(n<1e9) return tCore(Math.floor(n/1e6))+" juta"+(n%1e6?" "+tCore(n%1e6):"");
+    if(n<1e12) return tCore(Math.floor(n/1e9))+" miliar"+(n%1e9?" "+tCore(n%1e9):"");
+    return tCore(Math.floor(n/1e12))+" triliun"+(n%1e12?" "+tCore(n%1e12):"");
+  }
+  function terbilang(n){
+    n=Math.round(n||0);
+    if(n===0) return "Nol rupiah";
+    if(n<0) return "Minus "+terbilang(-n).toLowerCase();
+    const w=tCore(n).trim().replace(/\s+/g," ");
+    return w.charAt(0).toUpperCase()+w.slice(1)+" rupiah";
+  }
+
+  function escAttr(s){ return String(s==null?"":s).replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+  function escHtml(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  const $=id=>document.getElementById(id);
+  const itemsContainer=$("itemsContainer");
+  const customPphContainer=$("customPphContainer");
+  const customPphEmpty=$("customPphEmpty");
+
+  // defaults
+  $("invoiceNo").value="INV-"+todayISO().replace(/-/g,"").slice(2)+"-01";
+  $("tanggal").value=todayISO();
+  $("jatuhTempo").value=todayISO(7);
+  $("sNama").value="Mohammad Said";
+  $("sKota").value="Sidoarjo";
+  $("sAlamat").value="Taman Suko Asri Blok G31";
+  $("signerName").value="Mohammad Said";
+  $("bankInfo").value="BCA 271.0877.877\nMANDIRI 142.00.210.58275\nA/N MOHAMMAD SAID";
+  $("kwNo").value="KW-"+todayISO().replace(/-/g,"").slice(2)+"-01";
+  $("kwTanggal").value=todayISO();
+
+  function renderItemRows(){
+    itemsContainer.innerHTML="";
+    if(!items.length){ itemsContainer.innerHTML='<div class="empty-state">Belum ada item.</div>'; return; }
+    items.forEach(it=>{
+      const row=document.createElement("div");
+      row.className="item-row"; row.dataset.id=it.id;
+      row.innerHTML=`
+        <div class="item-row-top">
+          <div class="field" style="margin-bottom:0;"><label>Deskripsi</label>
+            <input type="text" data-field="deskripsi" data-id="${it.id}" value="${escAttr(it.deskripsi)}" placeholder="Cth: Jasa konsultasi">
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>Tipe</label>
+            <select data-field="tipe" data-id="${it.id}">
+              <option value="barang" ${it.tipe==="barang"?"selected":""}>Barang</option>
+              <option value="jasa" ${it.tipe==="jasa"?"selected":""}>Jasa</option>
+            </select>
+          </div>
+        </div>
+        <div class="item-row-grid">
+          <div class="field" style="margin-bottom:0;"><label>Qty</label>
+            <input type="number" min="0" step="1" data-field="qty" data-id="${it.id}" value="${it.qty}">
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>Satuan</label>
+            <input type="text" data-field="satuan" data-id="${it.id}" value="${escAttr(it.satuan)}">
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>Harga</label>
+            <input type="number" min="0" step="1" data-field="harga" data-id="${it.id}" value="${it.harga}">
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>Total</label>
+            <div class="item-total" data-role="rowtotal">${fmtRupiah(it.qty*it.harga)}</div>
+          </div>
+          <button class="item-remove" data-action="removeItem" data-id="${it.id}" title="Hapus" ${items.length<=1?"disabled":""}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/></svg>
+          </button>
+        </div>`;
+      itemsContainer.appendChild(row);
+    });
+  }
+
+  function renderCustomPph(){
+    customPphContainer.innerHTML="";
+    customPphEmpty.style.display=customPph.length===0?"block":"none";
+    customPph.forEach(c=>{
+      const row=document.createElement("div");
+      row.className="custom-pph-row"; row.dataset.id=c.id;
+      row.innerHTML=`
+        <input type="text" data-field="nama" data-cid="${c.id}" value="${escAttr(c.nama)}" placeholder="Cth: PPh 21">
+        <input type="number" min="0" step="0.1" data-field="tarif" data-cid="${c.id}" value="${c.tarif}" placeholder="%">
+        <button class="item-remove" data-action="removeCustomPph" data-id="${c.id}" title="Hapus">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/></svg>
+        </button>`;
+      customPphContainer.appendChild(row);
+    });
+  }
+
+  function renderSignBlock(kota, dateStr){
+    const showSign=$("chkSign").checked;
+    if(!showSign) return "";
+    const place=(kota||"—")+", "+dateStr;
+    const name=$("signerName").value.trim()||"—";
+    const imgHtml=signatureDataUrl?`<img src="${signatureDataUrl}" alt="ttd">`:"";
+    return `<div class="sign-wrap"><div class="sign-box">
+      <div class="sign-place">${escHtml(place)}</div>
+      <div class="sign-img-wrap">${imgHtml}</div>
+      <div class="sign-name">${escHtml(name)}</div>
+    </div></div>`;
+  }
+
+  function computeTotals(){
+    const subtotal=items.reduce((s,it)=>s+(Number(it.qty)||0)*(Number(it.harga)||0),0);
+    const pkp=$("chkPkp").checked;
+    let dpp,ppn;
+    if(pkp){ dpp=Math.round(subtotal/1.12); ppn=Math.round(subtotal-dpp); }
+    else { dpp=Math.round(subtotal); ppn=0; }
+    const totalTagihan=Math.round(subtotal);
+    const pphLines=[];
+    if($("chkPph23").checked) pphLines.push({label:"PPh 23 (2%) — jasa",amount:Math.round(dpp*0.02)});
+    customPph.forEach(c=>{
+      const rate=Number(c.tarif)||0;
+      if(c.nama&&rate>0) pphLines.push({label:`${c.nama} (${rate}%)`,amount:Math.round(dpp*(rate/100))});
+    });
+    const totalPph=pphLines.reduce((s,l)=>s+l.amount,0);
+    return {subtotal:Math.round(subtotal),pkp,dpp,ppn,totalTagihan,pphLines,totalPph,net:totalTagihan-totalPph};
+  }
+
+  function renderSummary(t){
+    let html="";
+    html+=sLine("Subtotal (incl PPN)",fmtRupiah(t.subtotal));
+    if(t.pkp){
+      html+=sLine("DPP (Dasar Pengenaan Pajak)",fmtRupiah(t.dpp));
+      html+=sLine("PPN 12%",fmtRupiah(t.ppn));
+    }
+    html+=sLine("Total Tagihan (Gross)",fmtRupiah(t.totalTagihan),true);
+    if(t.pphLines.length){
+      html+='<div class="summary-divider"></div>';
+      t.pphLines.forEach(l=>{ html+=sLine("− "+l.label,fmtSignedRupiah(-l.amount),false,true); });
+      html+=sLine("Total PPh Dipotong",fmtSignedRupiah(-t.totalPph),true,true);
+    }
+    html+='<div class="summary-divider"></div>';
+    html+=`<div class="summary-line bold summary-net"><span>Net Diterima</span><span>${fmtRupiah(t.net)}</span></div>`;
+    $("summaryBody").innerHTML=html;
+    const ib=$("infoBox");
+    if(t.totalPph>0){ ib.style.display="block"; ib.innerHTML=`💡 PPh dipotong pembeli. Anda terima ${fmtRupiah(t.net)} dari ${fmtRupiah(t.totalTagihan)}.`; }
+    else ib.style.display="none";
+  }
+  function sLine(l,v,bold,deduct){
+    return `<div class="summary-line ${bold?"bold":""} ${deduct?"deduct":""}"><span>${l}</span><span>${v}</span></div>`;
+  }
+
+  function renderPreview(t){
+    $("pvInvoiceNo").textContent=$("invoiceNo").value||"INV-0001";
+    $("pvTanggal").textContent=fmtTanggalID($("tanggal").value);
+    $("pvJatuhTempo").textContent="Jatuh tempo: "+fmtTanggalID($("jatuhTempo").value);
+    $("pvSellerNama").textContent=$("sNama").value.trim()||"—";
+    $("pvSellerNpwp").textContent=$("sNpwp").value.trim()?"NPWP: "+$("sNpwp").value.trim():"";
+    $("pvSellerAlamat").textContent=$("sAlamat").value.trim();
+    $("pvSellerKota").textContent=$("sKota").value.trim();
+    $("pvPkpBadge").innerHTML=t.pkp?'<span class="pkp-badge">PKP</span>':"";
+    $("pvBuyerNama").textContent=$("bNama").value.trim()||"—";
+    $("pvBuyerNpwp").textContent=$("bNpwp").value.trim()?"NPWP: "+$("bNpwp").value.trim():"";
+    $("pvBuyerAlamat").textContent=$("bAlamat").value.trim();
+    $("pvBuyerKota").textContent=$("bKota").value.trim();
+
+    const body=$("pvItemsBody"); body.innerHTML="";
+    items.forEach(it=>{
+      if(!it.deskripsi&&!it.harga) return;
+      const tr=document.createElement("tr");
+      tr.innerHTML=`<td>${escHtml(it.deskripsi||"(tanpa nama)")}</td><td>${Number(it.qty)||0} ${escHtml(it.satuan||"")}</td><td>${fmtRupiah(it.harga)}</td><td>${fmtRupiah((Number(it.qty)||0)*(Number(it.harga)||0))}</td>`;
+      body.appendChild(tr);
+    });
+    if(!body.children.length) body.innerHTML='<tr><td colspan="4" style="color:#9A9DA6;font-style:italic;">Belum ada item</td></tr>';
+
+    let sh="";
+    sh+=`<div class="inv-summary-line"><span>Subtotal</span><span>${fmtRupiah(t.subtotal)}</span></div>`;
+    if(t.pkp){
+      sh+=`<div class="inv-summary-line"><span>DPP</span><span>${fmtRupiah(t.dpp)}</span></div>`;
+      sh+=`<div class="inv-summary-line"><span>PPN 12%</span><span>${fmtRupiah(t.ppn)}</span></div>`;
+    }
+    sh+=`<div class="inv-summary-line bold"><span>Total Tagihan</span><span>${fmtRupiah(t.totalTagihan)}</span></div>`;
+    t.pphLines.forEach(l=>{ sh+=`<div class="inv-summary-line deduct"><span>− ${l.label}</span><span>${fmtSignedRupiah(-l.amount)}</span></div>`; });
+    sh+=`<div class="inv-summary-line net"><span>Net Diterima</span><span>${fmtRupiah(t.net)}</span></div>`;
+    $("pvSummaryBox").innerHTML=sh;
+
+    $("pvTerbilang").innerHTML=`Terbilang: <b>${terbilang(t.net)}</b>.`;
+
+    const note=$("catatan").value.trim();
+    const ne=$("pvNote");
+    if(note){ ne.style.display="block"; ne.innerHTML=`<b>Catatan:</b> ${escHtml(note)}`; }
+    else ne.style.display="none";
+
+    // bank block
+    const bank=$("bankInfo").value.trim();
+    const bb=$("pvBankBlock");
+    if(bank){ bb.style.display="block"; bb.innerHTML=`<div class="ttl">Transfer ke Rekening:</div>${escHtml(bank)}`; }
+    else bb.style.display="none";
+
+    $("pvSignBlock").innerHTML=renderSignBlock($("sKota").value.trim(),fmtTanggalID($("tanggal").value));
+  }
+
+  function renderKwitansiPreview(){
+    $("kvNo").textContent=$("kwNo").value||"—";
+    $("kvTerimaDari").textContent=$("kwTerimaDari").value.trim()||"—";
+    const jumlah=Number($("kwJumlah").value)||0;
+    $("kvJumlah").textContent=jumlah>0?fmtRupiah(jumlah):"—";
+    $("kvTerbilang").textContent=jumlah>0?terbilang(jumlah).replace(/ rupiah$/i," Rupiah"):"—";
+    $("kvUntuk").innerHTML=escHtml($("kwUntuk").value.trim()||"—").replace(/\n/g,"<br>");
+    $("kvKeterangan").textContent=$("kwKeterangan").value.trim()||"-";
+
+    const bank=$("bankInfo").value.trim();
+    const kb=$("kvBankBlock");
+    if(bank){ kb.style.display="block"; kb.innerHTML=`<div class="ttl">Transfer ke Rekening:</div>${escHtml(bank)}`; }
+    else kb.style.display="none";
+
+    $("kvSignBlock").innerHTML=renderSignBlock($("sKota").value.trim(),fmtTanggalID($("kwTanggal").value));
+  }
+
+  function recalcAndRender(){
+    document.querySelectorAll(".item-row").forEach(row=>{
+      const it=items.find(i=>i.id===row.dataset.id);
+      if(!it) return;
+      const el=row.querySelector("[data-role=rowtotal]");
+      if(el) el.textContent=fmtRupiah((Number(it.qty)||0)*(Number(it.harga)||0));
+    });
+    const t=computeTotals();
+    renderSummary(t);
+    renderPreview(t);
+    renderKwitansiPreview();
+    if(mode==="invoice"){
+      const ok=$("sNama").value.trim().length>0&&items.some(it=>it.deskripsi.trim().length>0&&(Number(it.harga)||0)>0);
+      $("btnDownload").disabled=!ok;
+    } else {
+      $("btnDownload").disabled=!($("kwTerimaDari").value.trim().length>0&&(Number($("kwJumlah").value)||0)>0);
+    }
+  }
+
+  // sign toggle
+  $("chkSign").addEventListener("change",()=>{
+    $("signSection").style.display=$("chkSign").checked?"":"none";
+    recalcAndRender();
+  });
+
+  $("appRoot").addEventListener("input",e=>{
+    const t=e.target;
+    if(t.dataset&&t.dataset.field&&t.dataset.id){
+      const it=items.find(i=>i.id===t.dataset.id);
+      if(it){
+        if(t.dataset.field==="qty"||t.dataset.field==="harga") it[t.dataset.field]=Number(t.value)||0;
+        else it[t.dataset.field]=t.value;
+      }
+    }
+    if(t.dataset&&t.dataset.field&&t.dataset.cid){
+      const c=customPph.find(i=>i.id===t.dataset.cid);
+      if(c){ if(t.dataset.field==="tarif") c.tarif=Number(t.value)||0; else c.nama=t.value; }
+    }
+    recalcAndRender();
+  });
+
+  $("appRoot").addEventListener("click",e=>{
+    const btn=e.target.closest("[data-action]");
+    if(!btn) return;
+    if(btn.dataset.action==="removeItem"){
+      if(items.length<=1) return;
+      items=items.filter(i=>i.id!==btn.dataset.id);
+      renderItemRows(); recalcAndRender();
+    }
+    if(btn.dataset.action==="removeCustomPph"){
+      customPph=customPph.filter(i=>i.id!==btn.dataset.id);
+      renderCustomPph(); recalcAndRender();
+    }
+  });
+
+  $("btnAddItem").addEventListener("click",()=>{ items.push(newItem()); renderItemRows(); recalcAndRender(); });
+  $("btnAddCustomPph").addEventListener("click",()=>{ customPph.push(newCustomPph()); renderCustomPph(); recalcAndRender(); });
+
+  $("signInput").addEventListener("change",e=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    if(file.size>2*1024*1024){ alert("Ukuran maks 2 MB."); e.target.value=""; return; }
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      signatureDataUrl=ev.target.result;
+      $("signPreviewImg").src=signatureDataUrl;
+      recalcAndRender();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $("btnTheme").addEventListener("click",()=>{
+    document.body.classList.toggle("dark");
+    $("iconMoon").innerHTML=document.body.classList.contains("dark")
+      ?'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
+      :'<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>';
+  });
+
+  function setMode(m){
+    mode=m;
+    document.querySelectorAll("[data-mode]").forEach(el=>{ el.style.display=el.dataset.mode===mode?"":"none"; });
+    $("modeBtnInvoice").classList.toggle("active",mode==="invoice");
+    $("modeBtnKwitansi").classList.toggle("active",mode==="kwitansi");
+    $("invoicePreview").style.display=mode==="invoice"?"":"none";
+    $("kwitansiPreview").style.display=mode==="kwitansi"?"":"none";
+    $("previewLabel").textContent=mode==="invoice"?"👁️ Preview Invoice (real-time)":"👁️ Preview Kwitansi (real-time)";
+    recalcAndRender();
+  }
+
+  $("modeToggle").addEventListener("click",e=>{
+    const btn=e.target.closest("button[data-set-mode]");
+    if(btn) setMode(btn.dataset.setMode);
+  });
+
+  $("btnReset").addEventListener("click",()=>{ if(confirm("Reset semua data?")) location.reload(); });
+
+  $("btnDownload").addEventListener("click",()=>{
+    if($("btnDownload").disabled) return;
+    let el,filename;
+    if(mode==="invoice"){
+      el=$("invoicePreview");
+      filename=(($("invoiceNo").value||"invoice").trim()||"invoice")+".pdf";
+    } else {
+      el=$("kwitansiPreview");
+      const n=($("kwTerimaDari").value||"Kwitansi").replace(/[\\/:\*?"<>|]/g,"-").trim()||"Kwitansi";
+      filename=`Kwitansi - ${n}.pdf`;
+    }
+    html2pdf().set({
+      margin:10,filename,
+      image:{type:"jpeg",quality:0.98},
+      html2canvas:{scale:2,useCORS:true},
+      jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}
+    }).from(el).save();
+  });
+
+  renderItemRows();
+  renderCustomPph();
+  setMode("invoice");
+})();
+</script>
+</body>
+</html>
